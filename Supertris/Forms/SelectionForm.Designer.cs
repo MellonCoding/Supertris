@@ -1,10 +1,6 @@
-﻿using System.Windows.Forms;
-using System.Xml.Linq;
-using Supertris.Classes;
-
-namespace Supertris.Forms
+﻿namespace Supertris.Forms
 {
-    partial class SelectionForm
+    partial class SelectionForm : Form
     {
         private System.ComponentModel.IContainer components = null;
 
@@ -24,6 +20,7 @@ namespace Supertris.Forms
             btnBotBot = new CustomButton();
             BtnApriTraining = new CustomButton();
             BtnTipoBot = new CustomButton();
+            BtnModalitaTris = new CustomButton();
             lblTitolo = new Label();
             SuspendLayout();
 
@@ -75,10 +72,19 @@ namespace Supertris.Forms
             BtnTipoBot.Text = "Bot: Albero pesato";
             BtnTipoBot.Click += btnTipoBot_Click;
 
+            // ── BtnModalitaTris ───────────────────────────────────
+            BtnModalitaTris.Location = new Point(50, 450);
+            BtnModalitaTris.Name = "BtnModalitaTris";
+            BtnModalitaTris.Size = new Size(300, 50);
+            BtnModalitaTris.TabIndex = 6;
+            BtnModalitaTris.Text = "Tris pieno: Nullo";
+            BtnModalitaTris.Click += btnModalitaTris_Click;
+
             // ── Form ──────────────────────────────────────────────
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(400, 500);
+            ClientSize = new Size(400, 560);
+            Controls.Add(BtnModalitaTris);
             Controls.Add(BtnTipoBot);
             Controls.Add(BtnApriTraining);
             Controls.Add(btnBotBot);
@@ -99,6 +105,7 @@ namespace Supertris.Forms
         private CustomButton btnBotBot;
         private CustomButton BtnApriTraining;
         private CustomButton BtnTipoBot;
+        private CustomButton BtnModalitaTris;
         private Label lblTitolo;
     }
 }

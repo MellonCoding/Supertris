@@ -1,96 +1,125 @@
 using Supertris.Helpers;
-using Supertris.Classes;
 using Supertris.AI;
 
-namespace Supertris
+namespace Supertris.Forms
 {
     /// <summary>
     /// Interfaccia di gioco principale con griglia 9x9.
-    /// 
+    ///
     /// FUNZIONAMENTO:
     /// - Crea 9 panel (mini-tris) con 9 bottoni ciascuno
     /// - Gestisce click sui bottoni e valida mosse
     /// - Coordina turni: giocatore -> bot (in PVE)
     /// - Aggiorna visualizzazione: colori panel, turno, info
     /// - In EvE: bot locale + FileWatcher per mosse remote
-    /// - Feedback visivo: cursori, panel oscurati durante bot
-    /// - Gestisce fine partita e vittoria
-    /// 
+    /// - Gestisce fine partita con opzioni reset/menu
+    ///
     /// MODALITÀ: 0=PVP, 1=PVE, 2=EvE
     /// </summary>
 
     public partial class GameForm : Form
     {
-        private GameManager gm;
-        private Form FormIniziale;
-        private CustomButton[,] buttons;
-        private Panel[] panels;
-        private Label lblTurno;
-        private Label lblInfo;
-        private int modalitaGioco;  // 0 = PVP, 1 = PVE, 2 = EVE
-        private int tipoBot;
+        // ── Stato gioco ───────────────────────────────────────────
+        private GameManager      gm;
+        private Form             FormIniziale;
+        private int              modalitaGioco;   // 0=PVP, 1=PVE, 2=EvE
+        private int              tipoBot;
+        private bool             botInPensiero;
+        private ModalitaTrisPieno modalitaTrisPieno;
+
+        // ── Bot ───────────────────────────────────────────────────
         private AlberoPesato botAllenato;
-        private MinimaxBot botAlgoritmico;
-        private bool botInPensiero;
-        private ColorManager colorManager = new ColorManager();
-        private string percorsoFile;
+        private MinimaxBot   botAlgoritmico;
+
+        // ── UI ────────────────────────────────────────────────────
+        private CustomButton[,] buttons;
+        private Panel[]         panels;
+        private Label           lblTurno;
+        private Label           lblInfo;
+
+        // ── File (EvE) ────────────────────────────────────────────
+        // TODO: rimuovere fileManager e fileWatcher quando il debug non serve più
+        private string      percorsoFile;
         private FileManager fileManager;
-
-        // EvE Mode
         private FileWatcher fileWatcher;
-        private bool sonoGiocatore1;
-        private bool aspettoMossaAvversario;
+        private bool        sonoGiocatore1;
+        private bool        aspettoMossaAvversario;
 
-        public GameForm(int mod, Form SelectionForm, int modBot, bool player1 = true)
+        // ── Flag interni ─────────────────────────────────────────
+        // true quando si sta aprendo una nuova partita — impedisce
+        // a FormClosing di mostrare il SelectionForm
+        private bool _nuovaPartita = false;
+
+        // ── Theme ─────────────────────────────────────────────────
+        private static ThemeManager TM => ThemeManager.Instance;
+
+        // ═════════════════════════════════════════════════════════
+        // COSTRUTTORE
+        // ═════════════════════════════════════════════════════════
+
+        public GameForm(int mod, Form selectionForm, int modBot,
+                        ModalitaTrisPieno modalitaTris = ModalitaTrisPieno.Nullo,
+                        bool player1 = true)
         {
             InitializeComponent();
 
-            BackColor = colorManager.coloreSfondo;
-            Size = new Size(550, 620);
+            BackColor     = TM.ColoreSfondo;
+            Size          = new Size(550, 620);
             StartPosition = FormStartPosition.CenterScreen;
 
             buttons = new CustomButton[9, 9];
-            panels = new Panel[9];
+            panels  = new Panel[9];
 
             InitializeUI();
 
-            gm = new GameManager();
-            modalitaGioco = mod;
-            tipoBot = modBot;
-            botInPensiero = false;
-            sonoGiocatore1 = player1;
+            modalitaGioco      = mod;
+            tipoBot            = modBot;
+            botInPensiero      = false;
+            sonoGiocatore1     = player1;
             aspettoMossaAvversario = false;
+            modalitaTrisPieno  = modalitaTris;
+            FormIniziale       = selectionForm;
 
-            OpenFileDialog openDialog = new OpenFileDialog
+            gm = new GameManager
             {
-                Filter = "File mosse (*.txt)|*.txt|Tutti i file (*.*)|*.*",
-                DefaultExt = "mosse"
+                ModalitaTrisPieno = modalitaTris
             };
 
-            if (openDialog.ShowDialog() == DialogResult.OK)
+            // ── File mosse (solo EvE, tenuto per debug) ───────────
+            // TODO: spostare o rimuovere quando il debug non serve più
+            if (mod == 2)
             {
-                percorsoFile = openDialog.FileName;
-                fileManager = new FileManager(percorsoFile);
-                fileManager.Start();
+                OpenFileDialog openDialog = new OpenFileDialog
+                {
+                    Filter     = "File mosse (*.txt)|*.txt|Tutti i file (*.*)|*.*",
+                    DefaultExt = "mosse"
+                };
+
+                if (openDialog.ShowDialog() == DialogResult.OK)
+                {
+                    percorsoFile = openDialog.FileName;
+                    fileManager  = new FileManager(percorsoFile);
+                    fileManager.Start();
+                }
             }
 
+            // ── Inizializzazione bot ──────────────────────────────
             switch (mod)
             {
-                case 1:
-                    if (tipoBot == 1)
-                        botAllenato = new AlberoPesato(true);
-                    else
-                        botAlgoritmico = new MinimaxBot();
+                case 1: // PVE
+                    if (tipoBot == 1) botAllenato    = new AlberoPesato(true);
+                    else              botAlgoritmico = new MinimaxBot();
                     break;
 
-                case 2:
-                    if (tipoBot == 1)
-                        botAllenato = new AlberoPesato(true);
-                    else
-                        botAlgoritmico = new MinimaxBot();
+                case 2: // EvE
+                    if (tipoBot == 1) botAllenato    = new AlberoPesato(true);
+                    else              botAlgoritmico = new MinimaxBot();
 
-                    fileWatcher = new FileWatcher(percorsoFile, OnMossaAvversarioRicevuta);
-                    fileWatcher.Avvia();
+                    if (percorsoFile != null)
+                    {
+                        fileWatcher = new FileWatcher(percorsoFile, OnMossaAvversarioRicevuta);
+                        fileWatcher.Avvia();
+                    }
 
                     if (sonoGiocatore1)
                     {
@@ -99,20 +128,23 @@ namespace Supertris
                     }
                     else
                     {
-                        lblInfo.Text = "🤖 Sei Giocatore 2 (O) - Aspetto mossa avversario...";
+                        lblInfo.Text          = "🤖 Sei Giocatore 2 (O) - Aspetto mossa avversario...";
                         aspettoMossaAvversario = true;
                     }
                     break;
             }
 
-            this.FormIniziale = SelectionForm;
             AggiornaVisualizzazione();
         }
 
+        // ═════════════════════════════════════════════════════════
+        // VISUALIZZAZIONE
+        // ═════════════════════════════════════════════════════════
+
         private void AggiornaVisualizzazione()
         {
-            lblTurno.Text = $"Turno: {gm.GetTurno()}";
-            lblTurno.ForeColor = gm.GetTurno() == 'X' ? colorManager.coloreX : colorManager.coloreO;
+            lblTurno.Text      = $"Turno: {gm.GetTurno()}";
+            lblTurno.ForeColor = gm.GetTurno() == 'X' ? TM.ColoreX : TM.ColoreO;
 
             int prossimoTris = gm.GetProssimaTrisObbligatoria();
 
@@ -120,26 +152,44 @@ namespace Supertris
             {
                 if (prossimoTris == -1)
                 {
-                    lblInfo.Text = "Mossa libera!";
+                    lblInfo.Text      = "Mossa libera!";
                     lblInfo.ForeColor = Color.FromArgb(100, 200, 100);
                 }
                 else
                 {
-                    lblInfo.Text = $"Devi giocare nel tris #{prossimoTris + 1}";
+                    lblInfo.Text      = $"Devi giocare nel tris #{prossimoTris + 1}";
                     lblInfo.ForeColor = Color.FromArgb(255, 200, 100);
                 }
             }
 
             for (int i = 0; i < 9; i++)
             {
-                if (panels[i] != null)
-                {
-                    panels[i].BackColor = prossimoTris == -1 ? colorManager.coloreTrisNormale
-                                        : i == prossimoTris ? colorManager.coloreTrisAttivo
-                                                              : colorManager.coloreTrisCompletato;
-                }
+                if (panels[i] == null) continue;
+
+                panels[i].BackColor = prossimoTris == -1 ? TM.ColoreTrisNormale
+                                    : i == prossimoTris  ? TM.ColoreTrisAttivo
+                                                         : TM.ColoreTrisCompletato;
             }
         }
+
+        /// <summary>
+        /// Aggiorna visivamente una cella dopo un flush:
+        /// azzera testo e colore di tutti i bottoni del tris specificato.
+        /// </summary>
+        private void AggiornaUIFlush(int numTris)
+        {
+            for (int i = 0; i < 9; i++)
+            {
+                var btn = buttons[numTris, i];
+                if (btn == null) continue;
+                btn.Text      = "";
+                btn.ForeColor = TM.ColoreTesto;
+            }
+        }
+
+        // ═════════════════════════════════════════════════════════
+        // GESTIONE MOSSA GIOCATORE
+        // ═════════════════════════════════════════════════════════
 
         private void Mossa(object? sender, EventArgs e)
         {
@@ -147,8 +197,8 @@ namespace Supertris
             {
                 if (modalitaGioco == 1)
                 {
-                    lblInfo.Text = "⏳ Aspetta che il bot finisca di pensare!";
-                    lblInfo.ForeColor = Color.FromArgb(255, 100, 100);
+                    lblInfo.Text      = "⏳ Aspetta che il bot finisca di pensare!";
+                    lblInfo.ForeColor = TM.ColoreX;
 
                     Task.Run(async () =>
                     {
@@ -157,7 +207,7 @@ namespace Supertris
                         {
                             if (botInPensiero)
                             {
-                                lblInfo.Text = "🤖 Il bot sta pensando...";
+                                lblInfo.Text      = "🤖 Il bot sta pensando...";
                                 lblInfo.ForeColor = Color.FromArgb(255, 200, 100);
                             }
                         });
@@ -168,42 +218,48 @@ namespace Supertris
 
             if (modalitaGioco == 2) return;
 
-            if (sender is not CustomButton btn)
+            if (sender is not CustomButton btn2)
             {
                 MessageBox.Show("Errore interno del gioco. Riavvia l'applicazione.");
                 return;
             }
 
-            if (btn.Text != "")
+            if (btn2.Text != "")
             {
-                lblInfo.Text = "❌ Cella già occupata!";
-                lblInfo.ForeColor = Color.FromArgb(255, 100, 100);
+                lblInfo.Text      = "❌ Cella già occupata!";
+                lblInfo.ForeColor = TM.ColoreX;
                 return;
             }
 
-            string tag = btn.Tag?.ToString() ?? "";
-            List<int> numeriTag = new List<int>();
+            var (numTris, row, col) = ParseTag(btn2.Tag?.ToString() ?? "");
+            if (numTris < 0) return;
 
-            foreach (char c in tag)
-            {
-                if (char.IsDigit(c))
-                    numeriTag.Add(int.Parse(c.ToString()));
-            }
+            EseguiMossa(numTris, row, col, btn2);
+        }
 
-            if (numeriTag.Count != 3) return;
-
-            int numTris = numeriTag[0];
-            int row = numeriTag[1];
-            int col = numeriTag[2];
+        private void EseguiMossa(int numTris, int row, int col, CustomButton? btn)
+        {
+            int prossimoNumTris = row * 3 + col;
 
             if (gm.MakeMove(numTris, row, col))
             {
                 char turnoAttuale = gm.GetTurno();
 
-                btn.Text = turnoAttuale.ToString();
-                btn.ForeColor = turnoAttuale == 'X' ? colorManager.coloreX : colorManager.coloreO;
+                if (btn != null)
+                {
+                    btn.Text      = turnoAttuale.ToString();
+                    btn.ForeColor = turnoAttuale == 'X' ? TM.ColoreX : TM.ColoreO;
+                }
 
-                fileManager.Write($"{turnoAttuale} {numTris} {(row * 3) + col}");
+                // TODO: rimuovere quando il debug non serve più
+                fileManager?.Write($"{turnoAttuale} {numTris} {(row * 3) + col}");
+
+                // Se modalità Flush e il prossimo tris è stato resettato, aggiorna UI
+                if (modalitaTrisPieno == ModalitaTrisPieno.Flush
+                    && gm.GetProssimaTrisObbligatoria() == prossimoNumTris)
+                {
+                    AggiornaUIFlush(prossimoNumTris);
+                }
 
                 char vincitore = gm.CheckWin();
                 if (vincitore != '-')
@@ -220,21 +276,28 @@ namespace Supertris
             }
             else
             {
-                lblInfo.Text = "❌ Mossa non valida! Controlla dove puoi giocare.";
-                lblInfo.ForeColor = Color.FromArgb(255, 100, 100);
+                lblInfo.Text      = "❌ Mossa non valida! Controlla dove puoi giocare.";
+                lblInfo.ForeColor = TM.ColoreX;
 
-                Task.Run(async () =>
+                if (btn != null)
                 {
-                    for (int i = 0; i < 3; i++)
+                    Task.Run(async () =>
                     {
-                        await Task.Delay(50);
-                        btn.Invoke(() => btn.BackColor = colorManager.coloreTrisAttivo);
-                        await Task.Delay(50);
-                        btn.Invoke(() => btn.BackColor = colorManager.coloreTrisNormale);
-                    }
-                });
+                        for (int i = 0; i < 3; i++)
+                        {
+                            await Task.Delay(50);
+                            btn.Invoke(() => btn.BackColor = TM.ColoreTrisAttivo);
+                            await Task.Delay(50);
+                            btn.Invoke(() => btn.BackColor = TM.ColoreTrisNormale);
+                        }
+                    });
+                }
             }
         }
+
+        // ═════════════════════════════════════════════════════════
+        // TURNO BOT (PVE)
+        // ═════════════════════════════════════════════════════════
 
         private bool DeveGiocareilBot()
             => modalitaGioco == 1 && gm.GetTurno() == 'O';
@@ -243,149 +306,66 @@ namespace Supertris
         {
             botInPensiero = true;
 
-            if (modalitaGioco == 1)
-            {
-                lblInfo.Text = "🤖 Il bot sta pensando...";
-                lblInfo.ForeColor = Color.FromArgb(255, 200, 100);
-                CambiaCursoreBottoni(Cursors.No);
-                DimmaPanels(true);
-            }
+            lblInfo.Text      = "🤖 Il bot sta pensando...";
+            lblInfo.ForeColor = Color.FromArgb(255, 200, 100);
+            CambiaCursoreBottoni(Cursors.No);
+            DimmaPanels(true);
 
             await Task.Delay(300);
 
-            string boardState = gm.GetBoardState();
-            int trisObb = gm.GetProssimaTrisObbligatoria();
-            char turnoBot = gm.GetTurno();
-
-            var mossa = tipoBot == 1
-                ? botAllenato?.CalcolaMossa(boardState, trisObb, turnoBot)
-                : botAlgoritmico?.CalcolaMossa(boardState, trisObb, turnoBot);
+            var mossa = CalcolaMossaBot(gm.GetBoardState(), gm.GetProssimaTrisObbligatoria(), gm.GetTurno());
 
             if (mossa.HasValue)
             {
                 int numTris = mossa.Value.numTris;
-                int row = mossa.Value.row;
-                int col = mossa.Value.col;
+                int row     = mossa.Value.row;
+                int col     = mossa.Value.col;
+                var btn     = buttons[numTris, row * 3 + col];
 
-                if (gm.MakeMove(numTris, row, col))
-                {
-                    int buttonIndex = row * 3 + col;
-                    if (buttons[numTris, buttonIndex] != null)
-                    {
-                        var btn = buttons[numTris, buttonIndex];
-                        btn.Text = turnoBot.ToString();
-                        btn.ForeColor = turnoBot == 'X' ? colorManager.coloreX : colorManager.coloreO;
-                    }
-
-                    fileManager.Write($"{turnoBot} {numTris} {(row * 3) + col}");
-
-                    char vincitore = gm.CheckWin();
-                    if (vincitore != '-')
-                    {
-                        GestioneVittoria(vincitore);
-                        botInPensiero = false;
-                        return;
-                    }
-
-                    gm.CambiaTurno();
-                    AggiornaVisualizzazione();
-                }
+                EseguiMossa(numTris, row, col, btn);
             }
 
             botInPensiero = false;
-
-            if (modalitaGioco == 1)
-            {
-                CambiaCursoreBottoni(Cursors.Hand);
-                DimmaPanels(false);
-            }
+            CambiaCursoreBottoni(Cursors.Hand);
+            DimmaPanels(false);
         }
 
-        private void CambiaCursoreBottoni(Cursor cursore)
-        {
-            for (int i = 0; i < 9; i++)
-            {
-                if (panels[i] == null) continue;
-                foreach (Control ctrl in panels[i].Controls)
-                {
-                    if (ctrl is CustomButton btn && btn.Text == "")
-                        btn.Cursor = cursore;
-                }
-            }
-        }
-
-        private void DimmaPanels(bool dimma)
-        {
-            int prossimoTris = gm.GetProssimaTrisObbligatoria();
-
-            for (int i = 0; i < 9; i++)
-            {
-                if (panels[i] == null) continue;
-
-                panels[i].BackColor = dimma
-                    ? colorManager.coloreTrisCompletato
-                    : prossimoTris == -1 ? colorManager.coloreTrisNormale
-                    : i == prossimoTris ? colorManager.coloreTrisAttivo
-                                         : colorManager.coloreTrisCompletato;
-            }
-        }
-
-        // ==================== MODALITÀ EVE ==================== //
+        // ═════════════════════════════════════════════════════════
+        // MODALITÀ EVE
+        // ═════════════════════════════════════════════════════════
 
         private void EseguiMossaBot()
         {
             if (aspettoMossaAvversario) return;
 
-            botInPensiero = true;
-            lblInfo.Text = "🤖 Il mio bot sta pensando...";
+            botInPensiero     = true;
+            lblInfo.Text      = "🤖 Il mio bot sta pensando...";
 
-            string boardState = gm.GetBoardState();
-            int trisObb = gm.GetProssimaTrisObbligatoria();
-            char turno = gm.GetTurno();
-
-            var mossa = tipoBot == 1
-                ? botAllenato?.CalcolaMossa(boardState, trisObb, turno)
-                : botAlgoritmico?.CalcolaMossa(boardState, trisObb, turno);
+            char turno  = gm.GetTurno();
+            var  mossa  = CalcolaMossaBot(gm.GetBoardState(), gm.GetProssimaTrisObbligatoria(), turno);
 
             if (mossa.HasValue)
             {
                 int numTris = mossa.Value.numTris;
-                int row = mossa.Value.row;
-                int col = mossa.Value.col;
+                int row     = mossa.Value.row;
+                int col     = mossa.Value.col;
+                var btn     = buttons[numTris, row * 3 + col];
 
-                if (gm.MakeMove(numTris, row, col))
+                EseguiMossa(numTris, row, col, btn);
+
+                if (fileManager != null)
                 {
-                    int buttonIndex = row * 3 + col;
-                    if (buttons[numTris, buttonIndex] != null)
-                    {
-                        var btn = buttons[numTris, buttonIndex];
-                        btn.Text = turno.ToString();
-                        btn.ForeColor = turno == 'X' ? colorManager.coloreX : colorManager.coloreO;
-                    }
-
                     string mossaStr = $"{turno} {numTris} {(row * 3) + col}";
-                    fileManager.Write(mossaStr);
-                    fileWatcher.AggiornaUltimaRiga(mossaStr);
-
-                    char vincitore = gm.CheckWin();
-                    if (vincitore != '-')
-                    {
-                        GestioneVittoria(vincitore);
-                        botInPensiero = false;
-                        return;
-                    }
-
-                    gm.CambiaTurno();
-                    AggiornaVisualizzazione();
-
-                    lblInfo.Text = "⏳ Aspetto mossa avversario...";
-                    aspettoMossaAvversario = true;
+                    fileWatcher?.AggiornaUltimaRiga(mossaStr);
                 }
+
+                lblInfo.Text           = "⏳ Aspetto mossa avversario...";
+                aspettoMossaAvversario = true;
             }
             else
             {
                 MessageBox.Show(
-                    $"⚠️ ERRORE: Il bot non ha trovato una mossa valida!\n\nTurno: {turno}\nTris obbligatoria: {trisObb}",
+                    $"⚠️ ERRORE: Il bot non ha trovato una mossa valida!\n\nTurno: {turno}",
                     "Errore Bot", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
@@ -408,103 +388,153 @@ namespace Supertris
                 }
 
                 char turnoAvversario = parti[0][0];
-                int numTris = int.Parse(parti[1]);
-                int posizione = int.Parse(parti[2]);
-                int row = posizione / 3;
-                int col = posizione % 3;
+                int  numTris         = int.Parse(parti[1]);
+                int  posizione       = int.Parse(parti[2]);
+                int  row             = posizione / 3;
+                int  col             = posizione % 3;
 
                 lblInfo.Text = $"📥 Ricevuta mossa avversario: Tris {numTris}, Pos {posizione}";
 
-                if (gm.MakeMove(numTris, row, col))
-                {
-                    int buttonIndex = row * 3 + col;
-                    if (buttons[numTris, buttonIndex] != null)
-                    {
-                        var btn = buttons[numTris, buttonIndex];
-                        btn.Text = turnoAvversario.ToString();
-                        btn.ForeColor = turnoAvversario == 'X' ? colorManager.coloreX : colorManager.coloreO;
-                    }
+                var btn = buttons[numTris, row * 3 + col];
+                EseguiMossa(numTris, row, col, btn);
 
-                    char vincitore = gm.CheckWin();
-                    if (vincitore != '-')
-                    {
-                        GestioneVittoria(vincitore);
-                        return;
-                    }
-
-                    gm.CambiaTurno();
-                    AggiornaVisualizzazione();
-
-                    Task.Delay(500).ContinueWith(_ => this.Invoke(() => EseguiMossaBot()));
-                }
-                else
-                {
-                    MessageBox.Show(
-                        $"❌ MOSSA INVALIDA DELL'AVVERSARIO!\n\nTris: {numTris}\nRiga: {row}\nColonna: {col}",
-                        "Errore Avversario", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                }
+                Task.Delay(500).ContinueWith(_ => this.Invoke(() => EseguiMossaBot()));
             });
         }
 
+        // ═════════════════════════════════════════════════════════
+        // FINE PARTITA
+        // ═════════════════════════════════════════════════════════
+
         private void GestioneVittoria(char vincitore)
         {
-            Color coloreVincitore = vincitore == 'X' ? colorManager.coloreX : colorManager.coloreO;
+            Color coloreVincitore = vincitore == 'X' ? TM.ColoreX : TM.ColoreO;
 
-            lblInfo.Text = $"🎉 {vincitore} ha vinto! 🎉";
+            lblInfo.Text      = $"🎉 {vincitore} ha vinto! 🎉";
             lblInfo.ForeColor = coloreVincitore;
-            lblInfo.Font = new Font("Segoe UI", 12, FontStyle.Bold);
+            lblInfo.Font      = TM.FontTitolo;
 
-            MessageBox.Show(
-                $"Complimenti! {vincitore} ha vinto la partita!",
-                "Fine Partita", MessageBoxButtons.OK, MessageBoxIcon.Information);
-
+            // Blocca tutti i bottoni
             for (int i = 0; i < 9; i++)
             {
                 if (panels[i] == null) continue;
-                foreach (Control btnCtrl in panels[i].Controls)
-                {
-                    if (btnCtrl is CustomButton b)
-                        b.Cursor = Cursors.No;
-                }
+                foreach (Control c in panels[i].Controls)
+                    if (c is CustomButton b) b.Cursor = Cursors.No;
             }
 
-            if (modalitaGioco == 2)
-                fileWatcher?.Ferma();
+            if (modalitaGioco == 2) fileWatcher?.Ferma();
+
+            // Dialog fine partita con scelta
+            var risultato = MessageBox.Show(
+                $"🎉 {vincitore} ha vinto!\n\nVuoi giocare ancora?",
+                "Fine Partita",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (risultato == DialogResult.Yes)
+                NuovaPartita();
+            else
+                TornaAlMenu();
+        }
+
+        private void NuovaPartita()
+        {
+            _nuovaPartita = true; // blocca FormClosing dal mostrare il SelectionForm
+            var nuovoForm = new GameForm(modalitaGioco, FormIniziale, tipoBot, modalitaTrisPieno, sonoGiocatore1);
+            nuovoForm.Show();
+            this.Close();
+        }
+
+        private void TornaAlMenu()
+        {
+            fileWatcher?.Ferma();
+            FormIniziale.Show();
+            this.Close();
         }
 
         private void GameForm_FormClosing(object sender, FormClosingEventArgs e)
         {
             fileWatcher?.Ferma();
-            FormIniziale.Show();
+            // Non mostrare il menu se si sta aprendo una nuova partita
+            if (!_nuovaPartita)
+                FormIniziale.Show();
         }
+
+        // ═════════════════════════════════════════════════════════
+        // HELPERS
+        // ═════════════════════════════════════════════════════════
+
+        private (int numTris, int row, int col) ParseTag(string tag)
+        {
+            // Formato atteso: "Tris{n}Row{r}Col{c}" con n,r,c cifra singola
+            var digits = tag.Where(char.IsDigit).Select(c => c - '0').ToList();
+            if (digits.Count != 3) return (-1, -1, -1);
+            return (digits[0], digits[1], digits[2]);
+        }
+
+        private (int numTris, int row, int col)? CalcolaMossaBot(string boardState, int trisObb, char turno)
+        {
+            return tipoBot == 1
+                ? botAllenato?.CalcolaMossa(boardState, trisObb, turno)
+                : botAlgoritmico?.CalcolaMossa(boardState, trisObb, turno);
+        }
+
+        private void CambiaCursoreBottoni(Cursor cursore)
+        {
+            for (int i = 0; i < 9; i++)
+            {
+                if (panels[i] == null) continue;
+                foreach (Control ctrl in panels[i].Controls)
+                    if (ctrl is CustomButton btn && btn.Text == "")
+                        btn.Cursor = cursore;
+            }
+        }
+
+        private void DimmaPanels(bool dimma)
+        {
+            int prossimoTris = gm.GetProssimaTrisObbligatoria();
+            for (int i = 0; i < 9; i++)
+            {
+                if (panels[i] == null) continue;
+                panels[i].BackColor = dimma
+                    ? TM.ColoreTrisCompletato
+                    : prossimoTris == -1 ? TM.ColoreTrisNormale
+                    : i == prossimoTris  ? TM.ColoreTrisAttivo
+                                         : TM.ColoreTrisCompletato;
+            }
+        }
+
+        // ═════════════════════════════════════════════════════════
+        // INIT UI
+        // ═════════════════════════════════════════════════════════
 
         internal void InitializeUI()
         {
-            const int BUTTON_SIZE = 50;
+            const int BUTTON_SIZE   = 50;
             const int BUTTON_MARGIN = 2;
-            const int TRIS_SPACING = 10;
-            const int START_X = 30;
-            const int START_Y = 80;
+            const int TRIS_SPACING  = 10;
+            const int START_X       = 30;
+            const int START_Y       = 80;
 
             lblInfo = new Label
             {
-                Location = new Point(START_X + 100, 25),
-                Size = new Size(400, 20),
-                Font = new Font("Segoe UI", 10),
-                ForeColor = Color.FromArgb(150, 150, 150),
+                Location  = new Point(START_X + 100, 25),
+                Size      = new Size(400, 20),
+                Font      = TM.FontUI,
+                ForeColor = TM.ColoreTestoSpento,
                 BackColor = Color.Transparent,
-                Text = "Mossa libera - Gioca dove vuoi!"
+                Text      = "Mossa libera - Gioca dove vuoi!"
             };
             Controls.Add(lblInfo);
 
             lblTurno = new Label
             {
-                Location = new Point(START_X, 20),
-                Size = new Size(300, 30),
-                Font = new Font("Segoe UI", 14, FontStyle.Bold),
-                ForeColor = colorManager.coloreTesto,
+                Location  = new Point(START_X, 20),
+                Size      = new Size(300, 30),
+                Font      = TM.FontTitolo,
+                ForeColor = TM.ColoreTesto,
                 BackColor = Color.Transparent,
-                Text = "Turno: X"
+                Text      = "Turno: X"
             };
             Controls.Add(lblTurno);
 
@@ -515,13 +545,13 @@ namespace Supertris
 
                 Panel trisPanel = new Panel
                 {
-                    Location = new Point(
+                    Location  = new Point(
                         START_X + trisCol * (BUTTON_SIZE * 3 + BUTTON_MARGIN * 2 + TRIS_SPACING),
                         START_Y + trisRow * (BUTTON_SIZE * 3 + BUTTON_MARGIN * 2 + TRIS_SPACING)
                     ),
-                    Size = new Size(BUTTON_SIZE * 3 + BUTTON_MARGIN * 2, BUTTON_SIZE * 3 + BUTTON_MARGIN * 2),
-                    BackColor = colorManager.coloreTrisNormale,
-                    Tag = $"Panel{numTris}"
+                    Size      = new Size(BUTTON_SIZE * 3 + BUTTON_MARGIN * 2, BUTTON_SIZE * 3 + BUTTON_MARGIN * 2),
+                    BackColor = TM.ColoreTrisNormale,
+                    Tag       = $"Panel{numTris}"
                 };
                 Controls.Add(trisPanel);
                 panels[numTris] = trisPanel;
@@ -532,16 +562,15 @@ namespace Supertris
                     {
                         var btn = new CustomButton
                         {
-                            Text = "",
+                            Text     = "",
                             Location = new Point(col * (BUTTON_SIZE + BUTTON_MARGIN), row * (BUTTON_SIZE + BUTTON_MARGIN)),
-                            Size = new Size(BUTTON_SIZE, BUTTON_SIZE),
-                            Tag = $"Tris{numTris}Row{row}Col{col}",
-                            Font = new Font("Segoe UI", 16, FontStyle.Bold),
+                            Size     = new Size(BUTTON_SIZE, BUTTON_SIZE),
+                            Tag      = $"Tris{numTris}Row{row}Col{col}",
+                            Font     = new Font(TM.FontTitolo.FontFamily, 16, FontStyle.Bold),
                         };
 
                         btn.Click += Mossa;
                         trisPanel.Controls.Add(btn);
-
                         buttons[numTris, row * 3 + col] = btn;
                     }
                 }

@@ -1,31 +1,28 @@
-using System.Drawing;
-
 namespace Supertris.Helpers
 {
+    /// <summary>
+    /// Wrapper retrocompatibile su ThemeManager.
+    /// Tutti i riferimenti a ColorManager continuano a funzionare
+    /// senza modifiche — leggono dal tema attivo via ThemeManager.
+    /// 
+    /// MIGRAZIONE: sostituisci gradualmente con ThemeManager.Instance
+    /// e rimuovi questo file quando non ci sono più riferimenti.
+    /// </summary>
     internal class ColorManager
     {
-        // ── Sfondo ────────────────────────────────────────────────
-        public readonly Color coloreSfondo          = Color.FromArgb( 65,  65,  65); // #414141
+        private static ThemeManager TM => ThemeManager.Instance;
 
-        // ── Tris / celle ──────────────────────────────────────────
-        public readonly Color coloreTrisNormale     = Color.FromArgb( 46,  46,  46); // #2e2e2e
-        public readonly Color coloreTrisAttivo      = Color.FromArgb( 74,  15,  24); // #4a0f18
-        public readonly Color coloreTrisCompletato  = Color.FromArgb( 30,  30,  30); // #1e1e1e
-
-        // ── Hover ─────────────────────────────────────────────────
-        public readonly Color coloreHover           = Color.FromArgb(138,  16,  48); // #8a1030
-
-        // ── X / O ─────────────────────────────────────────────────
-        public readonly Color coloreX               = Color.FromArgb(108,   4,  36); // #6c0424 rosso sangue
-        public readonly Color coloreO               = Color.FromArgb( 46,  95, 138); // #2e5f8a blu acciaio
-
-        // ── Testo ─────────────────────────────────────────────────
-        public readonly Color coloreTesto           = Color.FromArgb(255,  77, 109); // #ff4d6d rosso neon
-        public readonly Color coloreTestoSpento     = Color.FromArgb( 85,  85,  85); // #555555 completato
-
-        // ── Bordi ─────────────────────────────────────────────────
-        public readonly Color coloreBordo           = Color.FromArgb(108,   4,  36); // #6c0424 accento
-        public readonly Color coloreBordoAttivo     = Color.FromArgb(217, 160, 165); // #d9a0a5 rosa antico
-        public readonly Color coloreBordoCompletato = Color.FromArgb( 68,  68,  68); // #444444 spento
+        public Color coloreSfondo          => TM.ColoreSfondo;
+        public Color coloreTrisNormale     => TM.ColoreTrisNormale;
+        public Color coloreTrisAttivo      => TM.ColoreTrisAttivo;
+        public Color coloreTrisCompletato  => TM.ColoreTrisCompletato;
+        public Color coloreHover           => TM.ColoreHover;
+        public Color coloreX               => TM.ColoreX;
+        public Color coloreO               => TM.ColoreO;
+        public Color coloreTesto           => TM.ColoreTesto;
+        public Color coloreTestoSpento     => TM.ColoreTestoSpento;
+        public Color coloreBordo           => TM.ColoreBordo;
+        public Color coloreBordoAttivo     => TM.ColoreBordoAttivo;
+        public Color coloreBordoCompletato => TM.ColoreBordoCompletato;
     }
 }

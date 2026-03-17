@@ -1,13 +1,12 @@
 ﻿/// <summary>
-///     Supertris:
-/// 
-///     metodi:
-///     Tris  -> crea e popola il campo, segna che non é pieno e il vincitore (nessuno)
-///     Mossa -> input    (che player vuole fare la mossa, posizione x, posizione y) 
-///           -> processo (controlla che la mossa alla posizione data sia valida, se lo é stampa la mossa sul campo e controla se qualcuno ha vinto)
-///           -> output   (true se a mossa é andata a buon fine - false se la mossa non é valida o il tris é pieno/vinto)
-///     CheckVittoria -> controlla se dopo una
-///     
+/// Supertris — griglia 3x3 di mini-tris.
+///
+/// metodi:
+/// MakeMove         -> esegue una mossa nel mini-tris specificato
+/// CheckWin         -> controlla vittoria globale sulla meta-griglia
+/// IsTrisCompletato -> true se il mini-tris è vinto OPPURE pieno (pareggio)
+/// FlushTris        -> resetta un mini-tris specifico (modalità Flush)
+/// GetCampo         -> restituisce lo stato completo come stringa 81 char
 /// </summary>
 
 namespace Supertris.Classes
@@ -23,110 +22,106 @@ namespace Supertris.Classes
             winner = '-';
 
             for (int row = 0; row < 3; row++)
-            {
                 for (int col = 0; col < 3; col++)
-                {
                     bigField[row, col] = new Tris();
-                }
-            }
         }
 
-        // -------------------------------- HELPERS -------------------------------- //
+        // ── Helpers ───────────────────────────────────────────────
 
         public string GetCampo()
         {
             string array = "";
-
             for (int row = 0; row < 3; row++)
-            {
                 for (int col = 0; col < 3; col++)
-                {
                     array += bigField[row, col].GetCampo();
-                }
-            }
-
             return array;
         }
 
+        /// <summary>
+        /// Un tris è "completato" (non giocabile) se è stato vinto
+        /// oppure se è pieno senza un vincitore (pareggio nel mini-tris).
+        /// </summary>
         public bool IsTrisCompletato(int riga, int colonna)
         {
-            return (bigField[riga, colonna].GetVincitore() != '-') ? true : false;
+            var tris = bigField[riga, colonna];
+            return tris.GetVincitore() != '-' || tris.GetPieno();
         }
 
-        // -------------------------------- END HELPERS ---------------------------- // 
+        // ── Mossa ─────────────────────────────────────────────────
 
-        public bool MakeMove(char giocaore, int rigaBigField, int colonnaBigField, int riga, int colonna)
+        public bool MakeMove(char giocatore, int rigaBigField, int colonnaBigField, int riga, int colonna)
         {
-            // partita finita = false
-            if (winner != '-') { return false; }
-
-            // Prova a fare la mossa nel mini-tris specificato
-            return bigField[rigaBigField, colonnaBigField].MakeMove(giocaore, riga, colonna);
+            if (winner != '-') return false;
+            return bigField[rigaBigField, colonnaBigField].MakeMove(giocatore, riga, colonna);
         }
+
+        // ── Flush ─────────────────────────────────────────────────
+
+        /// <summary>
+        /// Resetta il mini-tris specificato (modalità Flush).
+        /// </summary>
+        public void FlushTris(int riga, int colonna)
+        {
+            bigField[riga, colonna].Flush();
+        }
+
+        // ── Vittoria ──────────────────────────────────────────────
 
         public char CheckWin()
         {
-            // Controllo vittoria righe
+            if (winner != '-') return winner;
+
+            // Righe
             for (int row = 0; row < 3; row++)
             {
-                if (winner != '-') break;
-
                 char first = bigField[row, 0].GetVincitore();
-                if (first != '-' &&
-                    first == bigField[row, 1].GetVincitore() &&
-                    first == bigField[row, 2].GetVincitore())
+                if (first != '-'
+                    && first == bigField[row, 1].GetVincitore()
+                    && first == bigField[row, 2].GetVincitore())
                 {
                     winner = first;
+                    return winner;
                 }
             }
 
-            // Controllo vittoria colonne
+            // Colonne
             for (int col = 0; col < 3; col++)
             {
-                if (winner != '-') break;
-
                 char first = bigField[0, col].GetVincitore();
-                if (first != '-' &&
-                    first == bigField[1, col].GetVincitore() &&
-                    first == bigField[2, col].GetVincitore())
+                if (first != '-'
+                    && first == bigField[1, col].GetVincitore()
+                    && first == bigField[2, col].GetVincitore())
                 {
                     winner = first;
+                    return winner;
                 }
             }
 
-            // Controllo diagonale principale (\)
-            if (winner == '-')
+            // Diagonale (\)
             {
                 char first = bigField[0, 0].GetVincitore();
-                if (first != '-' &&
-                    first == bigField[1, 1].GetVincitore() &&
-                    first == bigField[2, 2].GetVincitore())
+                if (first != '-'
+                    && first == bigField[1, 1].GetVincitore()
+                    && first == bigField[2, 2].GetVincitore())
                 {
                     winner = first;
+                    return winner;
                 }
             }
 
-            // Controllo diagonale secondaria (/)
-            if (winner == '-')
+            // Diagonale (/)
             {
                 char first = bigField[0, 2].GetVincitore();
-                if (first != '-' &&
-                    first == bigField[1, 1].GetVincitore() &&
-                    first == bigField[2, 0].GetVincitore())
+                if (first != '-'
+                    && first == bigField[1, 1].GetVincitore()
+                    && first == bigField[2, 0].GetVincitore())
                 {
                     winner = first;
+                    return winner;
                 }
             }
 
             return winner;
-        }
-
-        /// <summary>
-        /// Controlla se un mini-tris specifico è stato vinto
-        /// </summary>
-        public bool CheckWinMiniBoard(int row, int col)
-        {
-            return bigField[row, col].CheckWin() != '-';
         }
     }
 }

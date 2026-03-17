@@ -1,11 +1,16 @@
+﻿using System.Drawing.Drawing2D;
 using Supertris.Helpers;
-using System.Drawing.Drawing2D;
 
-namespace Supertris.Classes
+namespace Supertris
 {
+    /// <summary>
+    /// Bottone custom con stile Hellsing.
+    /// Colori e font vengono letti da ThemeManager.Instance
+    /// così si aggiornano automaticamente al cambio tema.
+    /// </summary>
     public class CustomButton : Button
     {
-        private static readonly ColorManager _cm = new ColorManager();
+        private static ThemeManager TM => ThemeManager.Instance;
 
         private bool _isHovered = false;
         private bool _isPressed = false;
@@ -14,12 +19,11 @@ namespace Supertris.Classes
         {
             FlatStyle = FlatStyle.Flat;
             FlatAppearance.BorderSize = 0;
-            Font = LoadFont("ShureTechMono Nerd Font", 9.5f);
+            Font = TM.FontBottone;
             Cursor = Cursors.Hand;
             Size = new Size(150, 40);
             UseVisualStyleBackColor = false;
 
-            // Necessario per trasparenza angoli
             SetStyle(ControlStyles.SupportsTransparentBackColor, true);
             BackColor = Color.Transparent;
 
@@ -27,25 +31,6 @@ namespace Supertris.Classes
             MouseLeave += (s, e) => { _isHovered = false; _isPressed = false; Invalidate(); };
             MouseDown += (s, e) => { _isPressed = true; Invalidate(); };
             MouseUp += (s, e) => { _isPressed = false; Invalidate(); };
-        }
-
-
-
-        // Carica il font richiesto; se non installato cade su Consolas poi Segoe UI
-        private static Font LoadFont(string name, float size)
-        {
-            foreach (string candidate in new[] { name, "Consolas", "Segoe UI" })
-            {
-                try
-                {
-                    var f = new Font(candidate, size, FontStyle.Regular, GraphicsUnit.Point);
-                    if (f.Name.Equals(candidate, StringComparison.OrdinalIgnoreCase))
-                        return f;
-                    f.Dispose();
-                }
-                catch { }
-            }
-            return SystemFonts.DefaultFont;
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -57,19 +42,16 @@ namespace Supertris.Classes
             Rectangle inner = new Rectangle(0, 0, Width - 1, Height - 1);
             int radius = 6;
 
-            // 1. Dipingi gli angoli col colore del parent così spariscono
-            Color parentBg = Parent?.BackColor ?? _cm.coloreSfondo;
+            // Dipingi gli angoli col colore del parent così spariscono
+            Color parentBg = Parent?.BackColor ?? TM.ColoreSfondo;
             using (SolidBrush cornerBrush = new SolidBrush(parentBg))
-            {
                 g.FillRectangle(cornerBrush, rect);
-            }
 
-            Color bg = _isPressed ? _cm.coloreX
-                         : _isHovered ? _cm.coloreHover
-                         : _cm.coloreX;
-            Color border = _isHovered ? _cm.coloreBordoAttivo : _cm.coloreBordo;
+            Color bg = _isPressed ? TM.ColoreX
+                         : _isHovered ? TM.ColoreHover
+                         : TM.ColoreX;
+            Color border = _isHovered ? TM.ColoreBordoAttivo : TM.ColoreBordo;
 
-            // 2. Disegna il bottone arrotondato sopra
             using (GraphicsPath path = RoundedRect(inner, radius))
             {
                 using (SolidBrush brush = new SolidBrush(bg))
@@ -79,7 +61,7 @@ namespace Supertris.Classes
                     g.DrawPath(pen, path);
             }
 
-            TextRenderer.DrawText(g, Text, Font, inner, _cm.coloreTesto,
+            TextRenderer.DrawText(g, Text, Font, inner, TM.ColoreTesto,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
         }
 

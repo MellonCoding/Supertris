@@ -1,6 +1,6 @@
 using System.Drawing;
 
-namespace Supertris
+namespace Supertris.Helpers
 {
     internal class ColorManager
     {

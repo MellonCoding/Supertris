@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace Supertris.Helpers
+﻿namespace Supertris.Helpers
 {
     /// <summary>
     /// Monitora il file delle mosse e notifica quando l'avversario gioca.

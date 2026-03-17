@@ -1,6 +1,7 @@
+using Supertris.Helpers;
 using System.Drawing.Drawing2D;
 
-namespace Supertris
+namespace Supertris.Classes
 {
     public class CustomButton : Button
     {

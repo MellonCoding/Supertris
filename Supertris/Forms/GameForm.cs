@@ -1,4 +1,5 @@
 using Supertris.Helpers;
+using Supertris.Classes;
 using Supertris.AI;
 
 namespace Supertris
@@ -22,7 +23,7 @@ namespace Supertris
     {
         private GameManager gm;
         private Form FormIniziale;
-        private Button[,] buttons;
+        private CustomButton[,] buttons;
         private Panel[] panels;
         private Label lblTurno;
         private Label lblInfo;
@@ -37,7 +38,7 @@ namespace Supertris
 
         // EvE Mode
         private FileWatcher fileWatcher;
-        private bool sonoGiocatore1;  // true se sono il giocatore che fa la prima mossa
+        private bool sonoGiocatore1;
         private bool aspettoMossaAvversario;
 
         public GameForm(int mod, Form SelectionForm, int modBot, bool player1 = true)
@@ -48,7 +49,7 @@ namespace Supertris
             Size = new Size(550, 620);
             StartPosition = FormStartPosition.CenterScreen;
 
-            buttons = new Button[9, 9];
+            buttons = new CustomButton[9, 9];
             panels = new Panel[9];
 
             InitializeUI();
@@ -60,7 +61,6 @@ namespace Supertris
             sonoGiocatore1 = player1;
             aspettoMossaAvversario = false;
 
-            // imposta il file mosse.txt
             OpenFileDialog openDialog = new OpenFileDialog
             {
                 Filter = "File mosse (*.txt)|*.txt|Tutti i file (*.*)|*.*",
@@ -76,32 +76,22 @@ namespace Supertris
 
             switch (mod)
             {
-                case 1: // PVE - Player vs Bot
+                case 1:
                     if (tipoBot == 1)
-                    {
                         botAllenato = new AlberoPesato(true);
-                    }
                     else
-                    {
                         botAlgoritmico = new MinimaxBot();
-                    }
                     break;
 
-                case 2: // EVE - Bot vs Bot (networked)
-                    // Inizializza il bot locale
+                case 2:
                     if (tipoBot == 1)
-                    {
                         botAllenato = new AlberoPesato(true);
-                    }
                     else
-                    {
                         botAlgoritmico = new MinimaxBot();
-                    }
 
                     fileWatcher = new FileWatcher(percorsoFile, OnMossaAvversarioRicevuta);
                     fileWatcher.Avvia();
 
-                    // Se sono il giocatore 1, faccio la prima mossa
                     if (sonoGiocatore1)
                     {
                         lblInfo.Text = "🤖 Sei Giocatore 1 (X) - Fai la prima mossa!";
@@ -126,7 +116,7 @@ namespace Supertris
 
             int prossimoTris = gm.GetProssimaTrisObbligatoria();
 
-            if (modalitaGioco != 2) // Non in modalità EvE
+            if (modalitaGioco != 2)
             {
                 if (prossimoTris == -1)
                 {
@@ -144,39 +134,28 @@ namespace Supertris
             {
                 if (panels[i] != null)
                 {
-                    if (prossimoTris == -1)
-                    {
-                        panels[i].BackColor = colorManager.coloreTrisNormale;
-                    }
-                    else if (i == prossimoTris)
-                    {
-                        panels[i].BackColor = colorManager.coloreTrisAttivo;
-                    }
-                    else
-                    {
-                        panels[i].BackColor = colorManager.coloreTrisCompletato;
-                    }
+                    panels[i].BackColor = prossimoTris == -1 ? colorManager.coloreTrisNormale
+                                        : i == prossimoTris ? colorManager.coloreTrisAttivo
+                                                              : colorManager.coloreTrisCompletato;
                 }
             }
         }
 
         private void Mossa(object? sender, EventArgs e)
         {
-            // Blocca i click durante il turno del bot con feedback visivo
             if (botInPensiero)
             {
-                if (modalitaGioco == 1) // Solo in PVE mostra feedback
+                if (modalitaGioco == 1)
                 {
                     lblInfo.Text = "⏳ Aspetta che il bot finisca di pensare!";
                     lblInfo.ForeColor = Color.FromArgb(255, 100, 100);
 
-                    // Animazione rapida di "shake"
                     Task.Run(async () =>
                     {
                         await Task.Delay(1000);
                         this.Invoke(() =>
                         {
-                            if (botInPensiero) // Se ancora in pensiero
+                            if (botInPensiero)
                             {
                                 lblInfo.Text = "🤖 Il bot sta pensando...";
                                 lblInfo.ForeColor = Color.FromArgb(255, 200, 100);
@@ -187,15 +166,14 @@ namespace Supertris
                 return;
             }
 
-            if (modalitaGioco == 2) return; // In EvE i click sono disabilitati
+            if (modalitaGioco == 2) return;
 
-            if (sender is not Button btn)
+            if (sender is not CustomButton btn)
             {
                 MessageBox.Show("Errore interno del gioco. Riavvia l'applicazione.");
                 return;
             }
 
-            // 🔥 FIX PRINCIPALE: Ignora click su celle già giocate
             if (btn.Text != "")
             {
                 lblInfo.Text = "❌ Cella già occupata!";
@@ -209,9 +187,7 @@ namespace Supertris
             foreach (char c in tag)
             {
                 if (char.IsDigit(c))
-                {
                     numeriTag.Add(int.Parse(c.ToString()));
-                }
             }
 
             if (numeriTag.Count != 3) return;
@@ -225,7 +201,6 @@ namespace Supertris
                 char turnoAttuale = gm.GetTurno();
 
                 btn.Text = turnoAttuale.ToString();
-                btn.BackColor = Color.FromArgb(40, 40, 43);
                 btn.ForeColor = turnoAttuale == 'X' ? colorManager.coloreX : colorManager.coloreO;
 
                 fileManager.Write($"{turnoAttuale} {numTris} {(row * 3) + col}");
@@ -241,9 +216,7 @@ namespace Supertris
                 AggiornaVisualizzazione();
 
                 if (DeveGiocareilBot())
-                {
                     EseguiTurnoBot();
-                }
             }
             else
             {
@@ -255,36 +228,26 @@ namespace Supertris
                     for (int i = 0; i < 3; i++)
                     {
                         await Task.Delay(50);
-                        btn.Invoke(() => btn.BackColor = Color.FromArgb(150, 50, 50));
+                        btn.Invoke(() => btn.BackColor = colorManager.coloreTrisAttivo);
                         await Task.Delay(50);
-                        btn.Invoke(() => btn.BackColor = Color.FromArgb(55, 55, 58));
+                        btn.Invoke(() => btn.BackColor = colorManager.coloreTrisNormale);
                     }
                 });
             }
         }
 
         private bool DeveGiocareilBot()
-        {
-            if (modalitaGioco == 1 && gm.GetTurno() == 'O')
-                return true;
-
-            return false;
-        }
+            => modalitaGioco == 1 && gm.GetTurno() == 'O';
 
         private async void EseguiTurnoBot()
         {
             botInPensiero = true;
 
-            // Mostra feedback visivo che il bot sta pensando
-            if (modalitaGioco == 1) // Solo in PVE
+            if (modalitaGioco == 1)
             {
                 lblInfo.Text = "🤖 Il bot sta pensando...";
                 lblInfo.ForeColor = Color.FromArgb(255, 200, 100);
-
-                // Cambia il cursore per tutti i bottoni
                 CambiaCursoreBottoni(Cursors.No);
-
-                // Oscura leggermente i panel per indicare che sono bloccati
                 DimmaPanels(true);
             }
 
@@ -309,11 +272,8 @@ namespace Supertris
                     int buttonIndex = row * 3 + col;
                     if (buttons[numTris, buttonIndex] != null)
                     {
-                        Button btn = buttons[numTris, buttonIndex];
-
-                        // 🔥 SOLUZIONE: Stesso ordine
+                        var btn = buttons[numTris, buttonIndex];
                         btn.Text = turnoBot.ToString();
-                        btn.BackColor = Color.FromArgb(40, 40, 43);
                         btn.ForeColor = turnoBot == 'X' ? colorManager.coloreX : colorManager.coloreO;
                     }
 
@@ -334,7 +294,6 @@ namespace Supertris
 
             botInPensiero = false;
 
-            // Ripristina il cursore normale e i colori
             if (modalitaGioco == 1)
             {
                 CambiaCursoreBottoni(Cursors.Hand);
@@ -342,59 +301,32 @@ namespace Supertris
             }
         }
 
-        /// <summary>
-        /// Cambia il cursore di tutti i bottoni attivi
-        /// </summary>
         private void CambiaCursoreBottoni(Cursor cursore)
         {
             for (int i = 0; i < 9; i++)
             {
-                if (panels[i] != null)
+                if (panels[i] == null) continue;
+                foreach (Control ctrl in panels[i].Controls)
                 {
-                    foreach (Control ctrl in panels[i].Controls)
-                    {
-                        if (ctrl is Button btn && btn.Text == "") // Solo bottoni vuoti
-                        {
-                            btn.Cursor = cursore;
-                        }
-                    }
+                    if (ctrl is CustomButton btn && btn.Text == "")
+                        btn.Cursor = cursore;
                 }
             }
         }
 
-        /// <summary>
-        /// Oscura o ripristina i panel per feedback visivo
-        /// </summary>
         private void DimmaPanels(bool dimma)
         {
             int prossimoTris = gm.GetProssimaTrisObbligatoria();
 
             for (int i = 0; i < 9; i++)
             {
-                if (panels[i] != null)
-                {
-                    if (dimma)
-                    {
-                        // Oscura leggermente tutti i panel
-                        panels[i].BackColor = Color.FromArgb(35, 35, 38);
-                    }
-                    else
-                    {
-                        // Ripristina i colori normali in base allo stato
-                        if (prossimoTris == -1)
-                        {
-                            panels[i].BackColor = colorManager.coloreTrisNormale;
-                        }
-                        else if (i == prossimoTris)
-                        {
-                            panels[i].BackColor = colorManager.coloreTrisAttivo;
-                        }
-                        else
-                        {
-                            panels[i].BackColor = colorManager.coloreTrisCompletato;
-                        }
-                    }
-                }
+                if (panels[i] == null) continue;
+
+                panels[i].BackColor = dimma
+                    ? colorManager.coloreTrisCompletato
+                    : prossimoTris == -1 ? colorManager.coloreTrisNormale
+                    : i == prossimoTris ? colorManager.coloreTrisAttivo
+                                         : colorManager.coloreTrisCompletato;
             }
         }
 
@@ -423,24 +355,18 @@ namespace Supertris
 
                 if (gm.MakeMove(numTris, row, col))
                 {
-                    // Aggiorna UI
                     int buttonIndex = row * 3 + col;
                     if (buttons[numTris, buttonIndex] != null)
                     {
-                        Button btn = buttons[numTris, buttonIndex];
-
-                        // 🔥 SOLUZIONE: Stesso ordine
+                        var btn = buttons[numTris, buttonIndex];
                         btn.Text = turno.ToString();
-                        btn.BackColor = Color.FromArgb(40, 40, 43);
                         btn.ForeColor = turno == 'X' ? colorManager.coloreX : colorManager.coloreO;
                     }
 
-                    // Scrivi la mossa su file
                     string mossaStr = $"{turno} {numTris} {(row * 3) + col}";
                     fileManager.Write(mossaStr);
                     fileWatcher.AggiornaUltimaRiga(mossaStr);
 
-                    // Controlla vittoria
                     char vincitore = gm.CheckWin();
                     if (vincitore != '-')
                     {
@@ -452,23 +378,15 @@ namespace Supertris
                     gm.CambiaTurno();
                     AggiornaVisualizzazione();
 
-                    // Aspetta la mossa dell'avversario
                     lblInfo.Text = "⏳ Aspetto mossa avversario...";
                     aspettoMossaAvversario = true;
                 }
             }
             else
             {
-                // Il bot non ha trovato una mossa valida - ERROR
                 MessageBox.Show(
-                    $"⚠️ ERRORE: Il bot non ha trovato una mossa valida!\n\n" +
-                    $"Turno: {turno}\n" +
-                    $"Tris obbligatoria: {trisObb}\n" +
-                    $"BoardState length: {boardState.Length}",
-                    "Errore Bot",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error
-                );
+                    $"⚠️ ERRORE: Il bot non ha trovato una mossa valida!\n\nTurno: {turno}\nTris obbligatoria: {trisObb}",
+                    "Errore Bot", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
 
             botInPensiero = false;
@@ -482,7 +400,6 @@ namespace Supertris
             {
                 aspettoMossaAvversario = false;
 
-                // Parsing della mossa: "X 4 5" -> turno='X', numTris=4, posizione=5
                 string[] parti = rigaMossa.Split(' ');
                 if (parti.Length != 3)
                 {
@@ -498,22 +415,16 @@ namespace Supertris
 
                 lblInfo.Text = $"📥 Ricevuta mossa avversario: Tris {numTris}, Pos {posizione}";
 
-                // Esegui la mossa
                 if (gm.MakeMove(numTris, row, col))
                 {
-                    // Aggiorna UI
                     int buttonIndex = row * 3 + col;
                     if (buttons[numTris, buttonIndex] != null)
                     {
-                        Button btn = buttons[numTris, buttonIndex];
-
-                        // 🔥 SOLUZIONE: Stesso ordine
+                        var btn = buttons[numTris, buttonIndex];
                         btn.Text = turnoAvversario.ToString();
-                        btn.BackColor = Color.FromArgb(40, 40, 43);
                         btn.ForeColor = turnoAvversario == 'X' ? colorManager.coloreX : colorManager.coloreO;
                     }
 
-                    // Controlla vittoria
                     char vincitore = gm.CheckWin();
                     if (vincitore != '-')
                     {
@@ -524,65 +435,46 @@ namespace Supertris
                     gm.CambiaTurno();
                     AggiornaVisualizzazione();
 
-                    // Fai la mia mossa
                     Task.Delay(500).ContinueWith(_ => this.Invoke(() => EseguiMossaBot()));
                 }
                 else
                 {
                     MessageBox.Show(
                         $"❌ MOSSA INVALIDA DELL'AVVERSARIO!\n\nTris: {numTris}\nRiga: {row}\nColonna: {col}",
-                        "Errore Avversario",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error
-                    );
+                        "Errore Avversario", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 }
             });
         }
 
         private void GestioneVittoria(char vincitore)
         {
-            string nomeVincitore = vincitore.ToString();
             Color coloreVincitore = vincitore == 'X' ? colorManager.coloreX : colorManager.coloreO;
 
-            lblInfo.Text = $"🎉 {nomeVincitore} ha vinto! 🎉";
+            lblInfo.Text = $"🎉 {vincitore} ha vinto! 🎉";
             lblInfo.ForeColor = coloreVincitore;
             lblInfo.Font = new Font("Segoe UI", 12, FontStyle.Bold);
 
             MessageBox.Show(
-                $"Complimenti! {nomeVincitore} ha vinto la partita!",
-                "Fine Partita",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information
-            );
+                $"Complimenti! {vincitore} ha vinto la partita!",
+                "Fine Partita", MessageBoxButtons.OK, MessageBoxIcon.Information);
 
-            // 🔥 FIX: Cambia solo il cursore, non disabilitare
             for (int i = 0; i < 9; i++)
             {
-                if (panels[i] != null)
+                if (panels[i] == null) continue;
+                foreach (Control btnCtrl in panels[i].Controls)
                 {
-                    foreach (Control btnCtrl in panels[i].Controls)
-                    {
-                        if (btnCtrl is Button b)
-                            b.Cursor = Cursors.No;
-                    }
+                    if (btnCtrl is CustomButton b)
+                        b.Cursor = Cursors.No;
                 }
             }
 
-            // Ferma il file watcher se in modalità EvE
             if (modalitaGioco == 2)
-            {
                 fileWatcher?.Ferma();
-            }
         }
 
         private void GameForm_FormClosing(object sender, FormClosingEventArgs e)
         {
-            // Ferma il file watcher
-            if (fileWatcher != null)
-            {
-                fileWatcher.Ferma();
-            }
-
+            fileWatcher?.Ferma();
             FormIniziale.Show();
         }
 
@@ -594,7 +486,6 @@ namespace Supertris
             const int START_X = 30;
             const int START_Y = 80;
 
-            // Label per info mossa
             lblInfo = new Label
             {
                 Location = new Point(START_X + 100, 25),
@@ -606,7 +497,6 @@ namespace Supertris
             };
             Controls.Add(lblInfo);
 
-            // Label per il turno
             lblTurno = new Label
             {
                 Location = new Point(START_X, 20),
@@ -618,7 +508,6 @@ namespace Supertris
             };
             Controls.Add(lblTurno);
 
-            // Creazione griglia di bottoni
             for (int numTris = 0; numTris < 9; numTris++)
             {
                 int trisRow = numTris / 3;
@@ -641,44 +530,19 @@ namespace Supertris
                 {
                     for (int col = 0; col < 3; col++)
                     {
-                        Button btn = new Button
+                        var btn = new CustomButton
                         {
                             Text = "",
-                            Location = new Point(
-                                col * (BUTTON_SIZE + BUTTON_MARGIN),
-                                row * (BUTTON_SIZE + BUTTON_MARGIN)
-                            ),
+                            Location = new Point(col * (BUTTON_SIZE + BUTTON_MARGIN), row * (BUTTON_SIZE + BUTTON_MARGIN)),
                             Size = new Size(BUTTON_SIZE, BUTTON_SIZE),
                             Tag = $"Tris{numTris}Row{row}Col{col}",
-                            FlatStyle = FlatStyle.Flat,
-                            BackColor = Color.FromArgb(55, 55, 58),
-                            ForeColor = colorManager.coloreTesto,
                             Font = new Font("Segoe UI", 16, FontStyle.Bold),
-                            Cursor = Cursors.Hand
-                        };
-
-                        btn.FlatAppearance.BorderSize = 1;
-                        btn.FlatAppearance.BorderColor = colorManager.coloreBordo;
-
-                        btn.MouseEnter += (s, e) =>
-                        {
-                            if (btn.Text == "")
-                                btn.BackColor = colorManager.coloreHover;
-                        };
-
-                        btn.MouseLeave += (s, e) =>
-                        {
-                            if (btn.Text == "")
-                                btn.BackColor = Color.FromArgb(55, 55, 58);
-                            else
-                                btn.BackColor = Color.FromArgb(40, 40, 43);
                         };
 
                         btn.Click += Mossa;
                         trisPanel.Controls.Add(btn);
 
-                        int buttonIndex = row * 3 + col;
-                        buttons[numTris, buttonIndex] = btn;
+                        buttons[numTris, row * 3 + col] = btn;
                     }
                 }
             }

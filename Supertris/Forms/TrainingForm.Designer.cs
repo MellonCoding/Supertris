@@ -1,4 +1,4 @@
-﻿namespace SupertrisMeloniSquizzato.Forms
+﻿namespace Supertris.Forms
 {
     partial class TrainingForm : Form
     {

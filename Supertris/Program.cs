@@ -1,4 +1,3 @@
-using Supertris.Forms;
 namespace Supertris
 {
     internal static class Program
